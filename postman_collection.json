@@ -1,0 +1,101 @@
+{
+  "info": {
+    "name": "Cab Route Estimator API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Estimate Route (Sync)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": \"u_123\",\n  \"pickup\": {\"lat\": 12.9716, \"lng\": 77.5946},\n  \"dropoff\": {\"lat\": 12.9352, \"lng\": 77.6245},\n  \"stops\": [],\n  \"optimize_for\": \"time\",\n  \"algorithm\": \"auto\",\n  \"async_mode\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/routes/estimate",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "routes", "estimate"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Estimate Route (Async)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": \"u_123\",\n  \"pickup\": {\"lat\": 12.9716, \"lng\": 77.5946},\n  \"dropoff\": {\"lat\": 12.9352, \"lng\": 77.6245},\n  \"stops\": [{\"lat\": 12.95, \"lng\": 77.6}],\n  \"optimize_for\": \"time\",\n  \"algorithm\": \"auto\",\n  \"async_mode\": true\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/routes/estimate",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "routes", "estimate"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get Job Status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/jobs/{{job_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "jobs", "{{job_id}}"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get Job Result",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/jobs/{{job_id}}/result",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "jobs", "{{job_id}}", "result"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "job_id",
+      "value": "job_example123"
+    }
+  ]
+}

@@ -1,0 +1,373 @@
+import React, { useState, useEffect } from 'react';
+import { MapPin, Navigation, Clock, Zap, ChevronRight } from 'lucide-react';
+
+export default function CabRouteEstimator3D() {
+  const [pickup, setPickup] = useState({ lat: 12.9716, lng: 77.5946 });
+  const [dropoff, setDropoff] = useState({ lat: 12.9352, lng: 77.6245 });
+  const [stops, setStops] = useState([]);
+  const [optimizeFor, setOptimizeFor] = useState('time');
+  const [algorithm, setAlgorithm] = useState('auto');
+  const [loading, setLoading] = useState(false);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [activeCard, setActiveCard] = useState(null);
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => setLoading(false), 2000);
+  };
+
+  const addStop = () => {
+    setStops([...stops, { lat: 12.95, lng: 77.6 }]);
+  };
+
+  const removeStop = (index) => {
+    setStops(stops.filter((_, i) => i !== index));
+  };
+
+  const updateStop = (index, field, value) => {
+    const newStops = [...stops];
+    newStops[index][field] = parseFloat(value);
+    setStops(newStops);
+  };
+
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-black text-white">
+      {/* Animated gradient background */}
+      <style>{`
+        @keyframes gradient-shift {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        @keyframes breathing {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 0.8; }
+        }
+        @keyframes float-slow {
+          0%, 100% { transform: translateY(0px) translateX(0px); }
+          33% { transform: translateY(-20px) translateX(10px); }
+          66% { transform: translateY(10px) translateX(-10px); }
+        }
+        @keyframes glow-pulse {
+          0%, 100% { filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.5)); }
+          50% { filter: drop-shadow(0 0 40px rgba(59, 130, 246, 0.8)); }
+        }
+        @keyframes shimmer {
+          0% { background-position: -1000px 0; }
+          100% { background-position: 1000px 0; }
+        }
+        .gradient-bg {
+          background: linear-gradient(-45deg, #0f172a, #1e3a8a, #312e81, #0f172a);
+          background-size: 400% 400%;
+          animation: gradient-shift 15s ease infinite;
+        }
+        .breathing-light {
+          animation: breathing 3s ease-in-out infinite;
+        }
+        .glow-element {
+          animation: glow-pulse 3s ease-in-out infinite;
+        }
+        .floating {
+          animation: float-slow 8s ease-in-out infinite;
+        }
+        .card-glass {
+          background: rgba(15, 23, 42, 0.7);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(59, 130, 246, 0.2);
+          box-shadow: 0 8px 32px rgba(59, 130, 246, 0.1);
+        }
+        .card-glass-hover {
+          transition: all 0.3s ease;
+        }
+        .card-glass-hover:hover {
+          background: rgba(15, 23, 42, 0.9);
+          border: 1px solid rgba(59, 130, 246, 0.5);
+          box-shadow: 0 20px 50px rgba(59, 130, 246, 0.3);
+          transform: translateY(-5px);
+        }
+        .input-glass {
+          background: rgba(30, 58, 138, 0.3);
+          border: 1px solid rgba(59, 130, 246, 0.3);
+          transition: all 0.3s ease;
+        }
+        .input-glass:focus {
+          background: rgba(30, 58, 138, 0.5);
+          border: 1px solid rgba(59, 130, 246, 0.8);
+          box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+        }
+        .button-shimmer {
+          background: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899, #3b82f6);
+          background-size: 200% 100%;
+          animation: shimmer 3s linear infinite;
+        }
+      `}</style>
+
+      {/* Animated background elements */}
+      <div className="gradient-bg fixed inset-0 z-0"></div>
+      
+      {/* Floating orbs */}
+      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-10 w-48 h-48 breathing-light glow-element rounded-full bg-blue-500 opacity-10 blur-3xl floating"></div>
+        <div className="absolute top-1/3 right-20 w-64 h-64 breathing-light glow-element rounded-full bg-purple-500 opacity-5 blur-3xl floating" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute bottom-20 left-1/4 w-52 h-52 breathing-light glow-element rounded-full bg-cyan-500 opacity-5 blur-3xl floating" style={{ animationDelay: '4s' }}></div>
+        <div className="absolute bottom-1/3 right-1/4 w-48 h-48 breathing-light glow-element rounded-full bg-pink-500 opacity-5 blur-3xl floating" style={{ animationDelay: '3s' }}></div>
+      </div>
+
+      {/* Grid overlay */}
+      <div className="fixed inset-0 z-0 opacity-5" style={{
+        backgroundImage: `linear-gradient(rgba(59, 130, 246, 0.5) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(59, 130, 246, 0.5) 1px, transparent 1px)`,
+        backgroundSize: '50px 50px'
+      }}></div>
+
+      {/* Content */}
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-8">
+        <div className="w-full max-w-7xl">
+          {/* Header */}
+          <div className="mb-12 text-center">
+            <h1 className="text-6xl sm:text-7xl font-bold mb-4 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+              Route Optimizer
+            </h1>
+            <p className="text-lg sm:text-xl text-blue-300/80">
+              Intelligent pathfinding powered by advanced algorithms
+            </p>
+            <div className="mt-4 flex gap-2 justify-center flex-wrap">
+              <span className="text-sm px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-300">
+                Real-time
+              </span>
+              <span className="text-sm px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300">
+                Multi-route
+              </span>
+              <span className="text-sm px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
+                AI-optimized
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column - Form */}
+            <div className="lg:col-span-2 space-y-4">
+              <div className="card-glass card-glass-hover p-8 rounded-2xl">
+                <div className="flex items-center gap-3 mb-6">
+                  <MapPin className="w-6 h-6 text-blue-400" />
+                  <h2 className="text-2xl font-bold">Journey Details</h2>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Pickup Location */}
+                  <div className="group">
+                    <label className="block text-sm font-semibold text-blue-300 mb-3 group-hover:text-blue-200 transition">
+                      📍 Pickup Location
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <input
+                          type="number"
+                          step="any"
+                          value={pickup.lat}
+                          onChange={(e) => setPickup({ ...pickup, lat: parseFloat(e.target.value) })}
+                          placeholder="Latitude"
+                          className="input-glass w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="number"
+                          step="any"
+                          value={pickup.lng}
+                          onChange={(e) => setPickup({ ...pickup, lng: parseFloat(e.target.value) })}
+                          placeholder="Longitude"
+                          className="input-glass w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dropoff Location */}
+                  <div className="group">
+                    <label className="block text-sm font-semibold text-purple-300 mb-3 group-hover:text-purple-200 transition">
+                      🏁 Dropoff Location
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <input
+                          type="number"
+                          step="any"
+                          value={dropoff.lat}
+                          onChange={(e) => setDropoff({ ...dropoff, lat: parseFloat(e.target.value) })}
+                          placeholder="Latitude"
+                          className="input-glass w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="number"
+                          step="any"
+                          value={dropoff.lng}
+                          onChange={(e) => setDropoff({ ...dropoff, lng: parseFloat(e.target.value) })}
+                          placeholder="Longitude"
+                          className="input-glass w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stops */}
+                  <div className="group">
+                    <div className="flex justify-between items-center mb-3">
+                      <label className="block text-sm font-semibold text-pink-300 group-hover:text-pink-200 transition">
+                        🚩 Stops ({stops.length})
+                      </label>
+                      <button
+                        type="button"
+                        onClick={addStop}
+                        className="text-xs font-semibold px-3 py-1 rounded-lg bg-pink-500/20 text-pink-300 hover:bg-pink-500/40 transition"
+                      >
+                        + Add Stop
+                      </button>
+                    </div>
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {stops.map((stop, idx) => (
+                        <div key={idx} className="grid grid-cols-2 gap-2">
+                          <input
+                            type="number"
+                            step="any"
+                            value={stop.lat}
+                            onChange={(e) => updateStop(idx, 'lat', e.target.value)}
+                            placeholder="Lat"
+                            className="input-glass px-3 py-2 rounded-lg text-white placeholder-gray-500 outline-none text-sm"
+                          />
+                          <div className="flex gap-2">
+                            <input
+                              type="number"
+                              step="any"
+                              value={stop.lng}
+                              onChange={(e) => updateStop(idx, 'lng', e.target.value)}
+                              placeholder="Lng"
+                              className="input-glass flex-1 px-3 py-2 rounded-lg text-white placeholder-gray-500 outline-none text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeStop(idx)}
+                              className="px-3 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/40 transition font-bold"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Options Grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-cyan-300 mb-2">Optimize For</label>
+                      <select
+                        value={optimizeFor}
+                        onChange={(e) => setOptimizeFor(e.target.value)}
+                        className="input-glass w-full px-3 py-2 rounded-lg text-white outline-none text-sm"
+                      >
+                        <option>Time</option>
+                        <option>Distance</option>
+                        <option>Fare</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-cyan-300 mb-2">Algorithm</label>
+                      <select
+                        value={algorithm}
+                        onChange={(e) => setAlgorithm(e.target.value)}
+                        className="input-glass w-full px-3 py-2 rounded-lg text-white outline-none text-sm"
+                      >
+                        <option>Auto</option>
+                        <option>Dijkstra</option>
+                        <option>A*</option>
+                        <option>NN + 2-opt</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className={`w-full py-4 px-6 rounded-xl font-bold text-lg transition-all duration-300 ${
+                      loading
+                        ? 'button-shimmer text-white'
+                        : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-xl hover:shadow-2xl'
+                    }`}
+                  >
+                    {loading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                        Calculating Route...
+                      </span>
+                    ) : (
+                      <span className="flex items-center justify-center gap-2">
+                        <Navigation className="w-5 h-5" />
+                        Calculate Optimal Route
+                      </span>
+                    )}
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Right Column - Info Cards */}
+            <div className="space-y-4">
+              {/* Stats Card 1 */}
+              <div className="card-glass card-glass-hover p-6 rounded-2xl group cursor-pointer" onMouseEnter={() => setActiveCard(0)}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-3 rounded-lg bg-blue-500/20 group-hover:bg-blue-500/40 transition">
+                    <Zap className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <h3 className="font-semibold text-blue-300">Performance</h3>
+                </div>
+                <p className="text-3xl font-bold mb-1">42.5 km</p>
+                <p className="text-sm text-blue-300/60">Average route distance</p>
+              </div>
+
+              {/* Stats Card 2 */}
+              <div className="card-glass card-glass-hover p-6 rounded-2xl group cursor-pointer" onMouseEnter={() => setActiveCard(1)}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-3 rounded-lg bg-purple-500/20 group-hover:bg-purple-500/40 transition">
+                    <Clock className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <h3 className="font-semibold text-purple-300">ETA</h3>
+                </div>
+                <p className="text-3xl font-bold mb-1">34 min</p>
+                <p className="text-sm text-purple-300/60">Estimated travel time</p>
+              </div>
+
+              {/* Stats Card 3 */}
+              <div className="card-glass card-glass-hover p-6 rounded-2xl group cursor-pointer" onMouseEnter={() => setActiveCard(2)}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-3 rounded-lg bg-cyan-500/20 group-hover:bg-cyan-500/40 transition">
+                    <Navigation className="w-5 h-5 text-cyan-400" />
+                  </div>
+                  <h3 className="font-semibold text-cyan-300">Routes</h3>
+                </div>
+                <p className="text-3xl font-bold mb-1">3 Active</p>
+                <p className="text-sm text-cyan-300/60">Optimized variations</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="mt-12 text-center text-blue-300/50 text-sm">
+            <p>Advanced route optimization with real-time tracking</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

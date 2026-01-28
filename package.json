@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@react-google-maps/api": "^2.20.7",
+    "@tailwindcss/postcss": "^4.1.17",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.23.25",
+    "tailwind-merge": "^3.4.0"
+  }
+}
