@@ -32,6 +32,10 @@ const FlatCard = ({ children, className = "", active = false }: { children: Reac
 // 2. Background Grid (Clean, dark tech background)
 const TechBackground = () => (
   <div className="fixed inset-0 z-0 overflow-hidden bg-[#020617]">
+    {/* Animated Glowing Orbs */}
+    <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-amber-500/10 blur-[120px] rounded-full animate-pulse-slow shadow-[0_0_100px_rgba(245,158,11,0.2)]"></div>
+    <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-500/10 blur-[150px] rounded-full animate-pulse [animation-delay:2s] shadow-[0_0_120px_rgba(59,130,246,0.15)]"></div>
+
     {/* Grid Floor */}
     <div className="absolute inset-0 bg-[linear-gradient(rgba(245,158,11,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(245,158,11,0.03)_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_50%,#000_70%,transparent_100%)] transform perspective-500 rotate-x-60" />
 
