@@ -21,9 +21,9 @@ interface RouteFormProps {
   loading: boolean;
 }
 
-export default function RouteForm({ 
-  onSubmit, 
-  loading 
+export default function RouteForm({
+  onSubmit,
+  loading
 }: RouteFormProps) {
   const [pickup, setPickup] = useState<Location>({ lat: 12.9716, lng: 77.5946 });
   const [dropoff, setDropoff] = useState<Location>({ lat: 12.9352, lng: 77.6245 });
@@ -160,7 +160,7 @@ export default function RouteForm({
               <span>+ Add Stop</span>
             </button>
           </div>
-          
+
           <div className="space-y-4 max-h-60 overflow-y-auto pr-2">
             {stops.map((stop, idx) => (
               <div key={idx} className="grid grid-cols-1 gap-3 p-4 bg-gray-800/30 rounded-xl border border-gray-700/50 card-glass">
@@ -251,7 +251,7 @@ export default function RouteForm({
                 <span className="block text-xs text-gray-400">Fastest route</span>
               </div>
             </label>
-            
+
             <label className="flex items-center gap-3 p-3 bg-gray-800/30 rounded-xl border border-gray-700/50 cursor-pointer hover:bg-gray-800/50 transition-all card-glass">
               <input
                 type="radio"
@@ -266,7 +266,7 @@ export default function RouteForm({
                 <span className="block text-xs text-gray-400">Shortest route</span>
               </div>
             </label>
-            
+
             <label className="flex items-center gap-3 p-3 bg-gray-800/30 rounded-xl border border-gray-700/50 cursor-pointer hover:bg-gray-800/50 transition-all card-glass">
               <input
                 type="radio"
@@ -290,7 +290,7 @@ export default function RouteForm({
             <Brain className="w-5 h-5 text-amber-500" />
             Algorithm Selection
           </h3>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="flex items-center gap-3 p-4 bg-gray-800/30 rounded-xl border border-gray-700/50 cursor-pointer hover:bg-gray-800/50 transition-all card-glass">
               <input
@@ -306,35 +306,51 @@ export default function RouteForm({
                 <span className="block text-sm text-gray-400">Let system choose best algorithm</span>
               </div>
             </label>
-            
-            <label className="flex items-center gap-3 p-4 bg-gray-800/30 rounded-xl border border-gray-700/50 cursor-pointer hover:bg-gray-800/50 transition-all card-glass">
-              <input
-                type="radio"
-                name="algorithm"
-                value="dijkstra"
-                checked={algorithm === 'dijkstra'}
-                onChange={() => setAlgorithm('dijkstra')}
-                className="w-5 h-5 text-blue-500"
-              />
-              <div>
-                <span className="block font-medium text-white">🔷 Classic Dijkstra</span>
-                <span className="block text-sm text-gray-400">Guaranteed shortest path</span>
+
+            <label className="group relative flex flex-col gap-3 p-4 bg-slate-900/40 border border-slate-700/50 rounded-xl cursor-pointer hover:border-amber-500/50 transition-all card-glass overflow-hidden">
+              <div className="flex items-center gap-3">
+                <input
+                  type="radio"
+                  name="algorithm"
+                  value="dijkstra"
+                  checked={algorithm === 'dijkstra'}
+                  onChange={() => setAlgorithm('dijkstra')}
+                  className="w-5 h-5 text-amber-500 accent-amber-500"
+                />
+                <div>
+                  <span className="block font-bold text-white tracking-tight">Classic Dijkstra</span>
+                  <span className="block text-xs text-slate-500 font-mono">O(E log V) Efficiency</span>
+                </div>
               </div>
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none mt-2">
+                <p className="text-[10px] text-slate-400 leading-tight">
+                  Guarantees the shortest path by exploring all possible directions uniformly. Ideal for smaller search spaces where precision is paramount.
+                </p>
+              </div>
+              <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/5 blur-2xl rounded-full translate-x-1/2 -translate-y-1/2 group-hover:bg-blue-500/10 transition-colors"></div>
             </label>
-            
-            <label className="flex items-center gap-3 p-4 bg-gray-800/30 rounded-xl border border-gray-700/50 cursor-pointer hover:bg-gray-800/50 transition-all card-glass">
-              <input
-                type="radio"
-                name="algorithm"
-                value="astar"
-                checked={algorithm === 'astar'}
-                onChange={() => setAlgorithm('astar')}
-                className="w-5 h-5 text-blue-500"
-              />
-              <div>
-                <span className="block font-medium text-white">⭐ Classic A*</span>
-                <span className="block text-sm text-gray-400">Heuristic-guided search</span>
+
+            <label className="group relative flex flex-col gap-3 p-4 bg-slate-900/40 border border-slate-700/50 rounded-xl cursor-pointer hover:border-amber-500/50 transition-all card-glass overflow-hidden">
+              <div className="flex items-center gap-3">
+                <input
+                  type="radio"
+                  name="algorithm"
+                  value="astar"
+                  checked={algorithm === 'astar'}
+                  onChange={() => setAlgorithm('astar')}
+                  className="w-5 h-5 text-amber-500 accent-amber-500"
+                />
+                <div>
+                  <span className="block font-bold text-white tracking-tight">A* Optimized Search</span>
+                  <span className="block text-xs text-slate-500 font-mono">Heuristic Guided</span>
+                </div>
               </div>
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none mt-2">
+                <p className="text-[10px] text-slate-400 leading-tight">
+                  Uses the Haversine formula as a heuristic to prune the search space, drastically reducing computation time while maintaining optimality.
+                </p>
+              </div>
+              <div className="absolute top-0 right-0 w-16 h-16 bg-purple-500/5 blur-2xl rounded-full translate-x-1/2 -translate-y-1/2 group-hover:bg-purple-500/10 transition-colors"></div>
             </label>
           </div>
         </div>
@@ -388,11 +404,10 @@ export default function RouteForm({
         <button
           type="submit"
           disabled={loading}
-          className={`w-full py-4 px-6 rounded-xl font-bold text-lg transition-all duration-300 flex items-center justify-center gap-2 ${
-            loading
+          className={`w-full py-4 px-6 rounded-xl font-bold text-lg transition-all duration-300 flex items-center justify-center gap-2 ${loading
               ? 'bg-gradient-to-r from-gray-600 to-gray-700 text-gray-300 cursor-not-allowed'
               : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-0.5'
-          }`}
+            }`}
         >
           {loading ? (
             <>

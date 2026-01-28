@@ -7,3 +7,4 @@ export { default as Header } from './Header';
 export { default as Background } from './Background';
 export { default as AlgorithmSteps } from './AlgorithmSteps';
 export { default as AlgorithmTreeVisualization } from './AlgorithmTreeVisualization';
+export { default as EngineeringInsights } from './EngineeringInsights';
