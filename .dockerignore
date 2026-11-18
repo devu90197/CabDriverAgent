@@ -1,0 +1,13 @@
+.git
+.venv
+**/venv
+**/node_modules
+**/__pycache__
+.playwright
+.env
+**/.env
+**/.env.local
+**/.env*
+**/secrets.toml
+**/.next
+**/test-results

@@ -24,14 +24,14 @@ export default function Header() {
         </h1>
 
         <p className="text-slate-400 max-w-xl text-lg font-light leading-relaxed mb-8">
-          A high-performance route estimation engine leveraging <span className="text-slate-200 font-medium">distributed task queues</span> and <span className="text-slate-200 font-medium">multi-heuristic algorithms</span> to solve complex logistics at scale.
+          Explore <span className="text-slate-200 font-medium">road routes and live location</span> with <span className="text-slate-200 font-medium">graph algorithms</span>, interactive maps, and multi-stop optimization.
         </p>
 
         <div className="flex flex-wrap gap-3">
           <span className="px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-sm backdrop-blur-md">FastAPI Backend</span>
-          <span className="px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider bg-purple-500/10 border border-purple-500/20 text-purple-400 rounded-sm backdrop-blur-md">Celery Workers</span>
-          <span className="px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider bg-red-500/10 border border-red-500/20 text-red-400 rounded-sm backdrop-blur-md">Redis Broker</span>
-          <span className="px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-sm backdrop-blur-md">Supabase DB</span>
+          <span className="px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider bg-purple-500/10 border border-purple-500/20 text-purple-400 rounded-sm backdrop-blur-md">Live GPS</span>
+          <span className="px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider bg-red-500/10 border border-red-500/20 text-red-400 rounded-sm backdrop-blur-md">Graph Algorithms</span>
+          <span className="px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-sm backdrop-blur-md">Road Routing</span>
         </div>
       </motion.div>
       

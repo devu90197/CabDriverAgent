@@ -1,8 +1,16 @@
 # Cab Driver Agent - Intelligent Route Optimization
 
-An interactive Python and DSA portfolio project for exploring shortest paths and multi-stop route optimization. The standalone Streamlit demonstration runs real algorithms from the existing backend without a server, database, or task queue.
+An interactive full-stack route optimizer with the original Next.js/Leaflet frontend, FastAPI road routing, live browser location, and algorithm exploration. A separate standalone Streamlit demonstration is also available.
 
 Repository: https://github.com/devu90197/CabDriverAgent
+
+## Original Next.js application — start here
+
+The original interface supports real address search, interactive and draggable map markers, live device location with optional movement-based route refresh, road geometry and provider ETA, Dijkstra/A* comparisons, multi-stop Nearest Neighbor + 2-opt, and actual background-job progress. Hardcoded job successes, mock locations, fixed ETAs, and fabricated fleet metrics have been removed from this application path.
+
+See **[NEXTJS_DEPLOYMENT.md](NEXTJS_DEPLOYMENT.md)** for local setup, environment variables, frontend/backend deployment settings, algorithm boundaries, and verification commands. Run FastAPI with `backend/requirements-api.txt` and the Next.js app from `frontend/`. Deploy the frontend on a Next.js-capable host and the API on a Python/Docker host. Streamlit Community Cloud hosts only the separate Python demo below.
+
+Road ETA excludes live traffic. Default background jobs use a bounded, temporary in-process store and require one API process/replica. The retained legacy Celery/Supabase path is separate and is not invoked by this default API. Public map providers can be unavailable or rate limited; their failures are shown explicitly.
 
 ## Standalone Streamlit demonstration
 
@@ -72,49 +80,8 @@ Open https://share.streamlit.io/deploy and authorize access to the GitHub reposi
 
 Deploy from the repository root so Cloud finds `requirements.txt` and `sample_graph.csv`. Python selection and dependency handling follow the [Community Cloud deployment documentation](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy) and [dependency documentation](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/app-dependencies). Local tests do not establish that a public deployment exists; verify the resulting live URL after deployment.
 
-## Original distributed full-stack application
+## Retained distributed architecture references
 
-The original architecture is preserved separately:
+The original Celery worker, Redis/Supabase setup scripts, SQL, and optional client utilities remain in the repository. The repaired Next.js default uses the API documented in [NEXTJS_DEPLOYMENT.md](NEXTJS_DEPLOYMENT.md), with real provider routing and temporary in-process jobs. It does not invoke the legacy worker or automatically persist user routes.
 
-```text
-Next.js / TypeScript / Leaflet -> FastAPI -> Supabase
-                                  |
-                             Celery / Redis
-                                  |
-                         optional n8n webhook
-
-Streamlit -> demo_routing -> pure backend algorithms + sample_graph.csv
-```
-
-The full-stack application uses `frontend/` for its Next.js UI, `backend/app.py` for HTTP endpoints, and `worker/tasks.py` for asynchronous jobs. Supabase SQL and setup scripts remain in the repository. These services are **not** started or imported by the Streamlit application.
-
-Install full-stack dependencies independently:
-
-```bash
-python -m pip install -r backend/requirements.txt
-python -m pip install -r worker/requirements.txt
-# The worker also imports supabase, provided by backend/requirements.txt above.
-cd frontend
-npm install
-```
-
-Configure private environment variables using `.env.example` and [SUPABASE_SETUP.md](SUPABASE_SETUP.md). The backend needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; the frontend uses `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Configure worker broker/result URLs with `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND`. Optional n8n configuration uses environment variables. Never put service-role credentials in frontend variables or commit `.env` files. The Streamlit demo has no optional service integrations to configure; any future integration must read private Streamlit secrets or environment variables.
-
-Run services in separate terminals, using the configured environment:
-
-```bash
-cd backend
-uvicorn app:app --reload
-```
-
-```bash
-cd worker
-celery -A tasks worker --loglevel=info
-```
-
-```bash
-cd frontend
-npm run dev
-```
-
-The original distributed stack has separate service requirements and is not validated by the standalone demo tests. Historical architecture notes are retained in [ORIGINAL_ARCHITECTURE.md](ORIGINAL_ARCHITECTURE.md); statements there about scalability, automation, and performance are design context, not verified benchmark claims. Additional educational material remains in [ALGORITHM_EXPLANATION.md](ALGORITHM_EXPLANATION.md), [ALGORITHM_SUMMARY.md](ALGORITHM_SUMMARY.md), and the existing notebook.
+Historical setup and architecture notes are preserved in [ORIGINAL_ARCHITECTURE.md](ORIGINAL_ARCHITECTURE.md) and [SUPABASE_SETUP.md](SUPABASE_SETUP.md). These describe the legacy integration path and are not a verification claim for that distributed deployment. Educational material remains in [ALGORITHM_EXPLANATION.md](ALGORITHM_EXPLANATION.md), [ALGORITHM_SUMMARY.md](ALGORITHM_SUMMARY.md), and the notebook. Never commit actual credentials or expose service-role keys to frontend code.

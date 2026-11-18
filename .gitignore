@@ -42,3 +42,7 @@ node_modules/
 .streamlit/secrets.toml
 .pytest_cache/
 .ipynb_checkpoints/
+*.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
+.playwright/

@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
-import axios from 'axios';
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { saveRouteCalculation, subscribeToRouteUpdates } from '../lib/supabaseUtils';
+import { motion } from 'framer-motion';
+import { api, errorMessage } from '../lib/api';
+import type { RouteInput } from '../lib/routeTypes';
 import { RouteForm, StatusDisplay, StatsCard, Header, EngineeringInsights } from '../components';
 
 // --- VISUAL COMPONENTS (Updated for Absolute Sharpness) ---
@@ -44,28 +44,6 @@ const TechBackground = () => (
   </div>
 );
 
-interface Location {
-  lat: number;
-  lng: number;
-}
-
-interface FormData {
-  pickup: Location;
-  dropoff: Location;
-  stops: Location[];
-  optimizeFor: string;
-  algorithm: string;
-  asyncMode: boolean;
-  detailedSteps: boolean;
-  showAlgorithmComparison: boolean;
-}
-
-interface RouteAlgorithmStats {
-  steps_count?: number;
-  distance_km?: number;
-  execution_time_ms?: number;
-}
-
 export default function Home() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
@@ -73,140 +51,66 @@ export default function Home() {
   const [route, setRoute] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [subscription, setSubscription] = useState<any>(null);
-  const [activeCard, setActiveCard] = useState<number | null>(null);
-  const [lastCalculatedDistance, setLastCalculatedDistance] = useState<{ distance: number, algorithm: string } | null>(null);
+  const [activeCard] = useState<number | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [apiStatus, setApiStatus] = useState('Checking routing API');
+  const controller = useRef<AbortController | null>(null);
+  const generation = useRef(0);
+  const dijkstraStats = route?.dijkstra_stats;
+  const astarStats = route?.astar_stats;
+  const locations = route?.locations || [];
+  const lastCalculatedDistance = route ? { distance: route.distance_km, algorithm: route.algorithm } : null;
 
-  // Algorithm stats state (keeping only Dijkstra and A*)
-  const [dijkstraStats, setDijkstraStats] = useState<RouteAlgorithmStats | undefined>(undefined);
-  const [astarStats, setAstarStats] = useState<RouteAlgorithmStats | undefined>(undefined);
-  const [locations, setLocations] = useState<any[]>([]);
-
-  // Subscribe to real-time route updates
   useEffect(() => {
-    const sub = subscribeToRouteUpdates((payload) => {
-      console.log('New route calculation:', payload);
-    });
-
-    setSubscription(sub);
-
-    return () => {
-      if (sub) {
-        sub.unsubscribe();
-      }
-    };
+    const health = new AbortController();
+    api.get('/health', { signal: health.signal }).then(() => setApiStatus('Routing API connected')).catch(() => { if (!health.signal.aborted) setApiStatus('Routing API unavailable'); });
+    return () => { health.abort(); controller.current?.abort(); generation.current++; };
   }, []);
 
-  const handleSubmit = async (data: FormData) => {
-    setLoading(true);
-    setError(null);
-    setJobId(null);
-    setJobStatus(null);
-    setRoute(null);
-    setDijkstraStats(undefined);
-    setAstarStats(undefined);
-    setLocations([]);
-
-    try {
-      const requestBody = {
-        user_id: 'u_123',
-        pickup: data.pickup,
-        dropoff: data.dropoff,
-        stops: data.stops,
-        optimize_for: data.optimizeFor,
-        algorithm: data.algorithm,
-        async_mode: data.asyncMode,
-        detailed_steps: data.detailedSteps,
-        show_algorithm_comparison: data.showAlgorithmComparison,
-      };
-
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_BASE_URL || 'http://localhost:8000';
-      const response = await axios.post(`${backendUrl}/api/v1/routes/estimate`, requestBody);
-
-      if (response.data.status === 'queued') {
-        const jobId = response.data.job_id;
-        setJobId(jobId);
-        setJobStatus('queued');
-        pollJobStatus(jobId);
-      } else {
-        setRoute(response.data);
-
-        if (response.data.distance_km && response.data.algorithm) {
-          setLastCalculatedDistance({
-            distance: response.data.distance_km,
-            algorithm: response.data.algorithm
-          });
-        }
-
-        // Set algorithm stats (only Dijkstra and A*)
-        if (response.data.dijkstra_stats) setDijkstraStats(response.data.dijkstra_stats);
-        if (response.data.astar_stats) setAstarStats(response.data.astar_stats);
-        if (response.data.locations) setLocations(response.data.locations);
-
-        const routeData = {
-          user_id: 'u_123',
-          pickup: data.pickup,
-          dropoff: data.dropoff,
-          stops: data.stops,
-          result: response.data,
-          algorithm: data.algorithm
-        };
-        await saveRouteCalculation(routeData);
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || 'An error occurred');
-    } finally {
-      setLoading(false);
-    }
+  const invalidateRoute = () => {
+    generation.current++;
+    controller.current?.abort();
+    setLoading(false); setRoute(null); setJobId(null); setJobStatus(null); setProgress(0); setError(null); setPanelOpen(false);
   };
 
-  // Poll job status
-  const pollJobStatus = async (jobId: string) => {
-    const pollInterval = setInterval(async () => {
-      try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_BASE_URL || 'http://localhost:8000';
-        const statusResponse = await axios.get(`${backendUrl}/api/v1/jobs/${jobId}`);
-        const { status, progress } = statusResponse.data;
-
-        setJobStatus(status);
-        setProgress(progress);
-
-        if (status === 'completed') {
-          clearInterval(pollInterval);
-          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_BASE_URL || 'http://localhost:8000';
-          const resultResponse = await axios.get(`${backendUrl}/api/v1/jobs/${jobId}/result`);
-          setRoute(resultResponse.data.result);
-
-          if (resultResponse.data.result?.distance_km && resultResponse.data.result?.algorithm) {
-            setLastCalculatedDistance({
-              distance: resultResponse.data.result.distance_km,
-              algorithm: resultResponse.data.result.algorithm
-            });
+  const handleSubmit = async (data: RouteInput) => {
+    controller.current?.abort();
+    const request = new AbortController(); controller.current = request;
+    const version = ++generation.current;
+    setLoading(true); setError(null); setJobId(null); setJobStatus(null); setRoute(null); setProgress(0); setPanelOpen(true);
+    try {
+      const response = await api.post('/routes/estimate', {
+        pickup: data.pickup, dropoff: data.dropoff, stops: data.stops,
+        optimize_for: data.optimizeFor, algorithm: data.algorithm, routing_mode: data.routingMode,
+        async_mode: data.asyncMode, detailed_steps: data.detailedSteps, show_algorithm_comparison: data.showAlgorithmComparison,
+      }, { signal: request.signal });
+      if (version !== generation.current) return;
+      if (response.data.status === 'queued') {
+        const id = response.data.job_id;
+        setJobId(id); setJobStatus('queued');
+        const deadline = Date.now() + 120000;
+        while (!request.signal.aborted && Date.now() < deadline) {
+          const statusResponse = await api.get(`/jobs/${id}`, { signal: request.signal });
+          if (version !== generation.current) return;
+          const status = statusResponse.data;
+          setJobStatus(status.status); setProgress(status.progress);
+          if (status.status === 'failed') throw new Error(status.error || 'Route computation failed. Please retry.');
+          if (status.status === 'completed') {
+            const result = await api.get(`/jobs/${id}/result`, { signal: request.signal });
+            if (version === generation.current) { setRoute(result.data.result); setJobStatus('completed'); }
+            return;
           }
-
-          // Set algorithm stats (only Dijkstra and A*)
-          if (resultResponse.data.result?.dijkstra_stats) setDijkstraStats(resultResponse.data.result.dijkstra_stats);
-          if (resultResponse.data.result?.astar_stats) setAstarStats(resultResponse.data.result.astar_stats);
-          if (resultResponse.data.result?.locations) setLocations(resultResponse.data.result.locations);
-
-          const routeData = {
-            user_id: 'u_123',
-            pickup: resultResponse.data.result?.pickup || { lat: 12.9716, lng: 77.5946 },
-            dropoff: resultResponse.data.result?.dropoff || { lat: 12.9352, lng: 77.6245 },
-            stops: resultResponse.data.result?.stops || [],
-            result: resultResponse.data.result,
-            algorithm: resultResponse.data.result?.algorithm || 'auto'
-          };
-          await saveRouteCalculation(routeData);
-        } else if (status === 'failed') {
-          clearInterval(pollInterval);
-          setError('Job failed to complete');
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
-      } catch (err: any) {
-        clearInterval(pollInterval);
-        setError('Failed to fetch job status');
+        if (!request.signal.aborted) throw new Error('The job timed out. Please calculate again.');
+      } else {
+        setRoute(response.data); setJobStatus('completed'); setProgress(100);
       }
-    }, 2000);
+    } catch (err) {
+      if (!request.signal.aborted && version === generation.current) setError(errorMessage(err));
+    } finally {
+      if (version === generation.current) setLoading(false);
+    }
   };
 
   return (
@@ -270,12 +174,12 @@ export default function Home() {
               <Header />
               <div className="flex items-center gap-2 mt-2">
                 <span className="h-2 w-2 bg-amber-500 rounded-full animate-pulse shadow-[0_0_10px_#f59e0b]"></span>
-                <span className="text-xs font-mono text-amber-500 tracking-widest uppercase">Traffic Control: Online</span>
+                <span className="text-xs font-mono text-amber-500 tracking-widest uppercase">{apiStatus}</span>
               </div>
             </div>
             <div className="hidden md:block text-right">
-              <div className="text-[10px] text-slate-500 font-mono">SYS.VER.2.0.4</div>
-              <div className="text-[10px] text-slate-500 font-mono">CAB_FLEET_SYNC</div>
+              <div className="text-[10px] text-slate-500 font-mono">SYS.VER.2.0.0</div>
+              <div className="text-[10px] text-slate-500 font-mono">WAYPOINT_GRAPH_ENGINE</div>
             </div>
           </div>
         </motion.div>
@@ -295,16 +199,20 @@ export default function Home() {
             <RouteForm
               onSubmit={handleSubmit}
               loading={loading}
+              routePath={route?.route_geojson}
+              onInputsChange={invalidateRoute}
             />
           </FlatCard>
         </motion.div>
+
+        {route && <button type="button" onClick={() => setPanelOpen(true)} className="mb-6 px-5 py-3 rounded-lg border border-amber-500 text-amber-300">View route analysis</button>}
 
         {/* Stats Container */}
         <div className="w-full max-w-7xl mx-auto mb-24">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
               <span className="w-1 h-6 bg-amber-500 block rounded-sm"></span>
-              Fleet Metrics
+              Route metrics
             </h2>
           </div>
 
@@ -316,8 +224,8 @@ export default function Home() {
                 desc: lastCalculatedDistance?.algorithm ? `${lastCalculatedDistance.algorithm.replace(/_/g, ' ')} route` : "Optimal Path",
                 icon: "route" as 'route'
               },
-              { title: "Fuel Saved", value: "1.2 L", desc: "Efficiency Gain", icon: "zap" as 'zap' },
-              { title: "Fleet Rating", value: "4.9", desc: "Customer Score", icon: "smile" as 'smile' }
+              { title: "Estimated travel time", value: route ? `${route.eta_min.toFixed(1)} min` : "--", desc: "Driving profile estimate; excludes live traffic", icon: "clock" as 'clock' },
+              { title: "Calculation time", value: route ? `${route.execution_time_ms.toFixed(1)} ms` : "--", desc: route?.source || "Awaiting calculation", icon: "zap" as 'zap' }
             ]).map((stat, index) => (
               <motion.div
                 key={stat.title}
@@ -351,13 +259,14 @@ export default function Home() {
       {/* Result Panel */}
       <motion.div
         initial={{ y: "100%" }}
-        animate={{ y: (jobId || error || route) ? 0 : "100%" }}
+        animate={{ y: panelOpen && (loading || jobId || error || route) ? 0 : "100%" }}
         transition={{ type: "spring", damping: 25, stiffness: 120 }}
-        className="fixed bottom-0 left-0 right-0 z-50 h-[85vh]"
+        className={`fixed bottom-0 left-0 right-0 z-50 h-[85vh] ${panelOpen ? "" : "invisible pointer-events-none"}`}
+        role="dialog" aria-label="Route analysis" aria-hidden={!panelOpen}
       >
         <div className="absolute -top-10 left-0 w-full flex justify-center">
           <button
-            onClick={() => { setRoute(null); setJobId(null); setError(null); }}
+            onClick={() => setPanelOpen(false)}
             className="bg-amber-500 hover:bg-amber-400 text-slate-900 px-6 py-2 rounded-t-lg font-bold text-sm shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-colors flex items-center gap-2"
           >
             <span>CLOSE PANEL</span>
@@ -379,6 +288,7 @@ export default function Home() {
 
             <div className="flex-1 overflow-y-auto custom-scrollbar relative pr-2">
               <StatusDisplay
+                key={route?.calculated_at || jobId || "pending"}
                 jobId={jobId}
                 jobStatus={jobStatus}
                 progress={progress}

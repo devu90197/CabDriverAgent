@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient'
 
 // Function to save route calculation to Supabase
 export async function saveRouteCalculation(routeData: any) {
+  if (!supabase) return null
   try {
     const { data, error } = await supabase
       .from('route_calculations')
@@ -29,6 +30,7 @@ export async function saveRouteCalculation(routeData: any) {
 
 // Function to get route history for a user
 export async function getRouteHistory(userId: string) {
+  if (!supabase) return []
   try {
     const { data, error } = await supabase
       .from('route_calculations')
@@ -47,6 +49,7 @@ export async function getRouteHistory(userId: string) {
 
 // Function to subscribe to real-time route updates
 export function subscribeToRouteUpdates(callback: (payload: any) => void) {
+  if (!supabase) return null
   const subscription = supabase
     .channel('route_calculations_changes')
     .on(
@@ -67,6 +70,7 @@ export function subscribeToRouteUpdates(callback: (payload: any) => void) {
 
 // Function to save user preferences
 export async function saveUserPreferences(userId: string, preferences: any) {
+  if (!supabase) return null
   try {
     const { data, error } = await supabase
       .from('user_preferences')
@@ -86,6 +90,7 @@ export async function saveUserPreferences(userId: string, preferences: any) {
 
 // Function to get user preferences
 export async function getUserPreferences(userId: string) {
+  if (!supabase) return {}
   try {
     const { data, error } = await supabase
       .from('user_preferences')

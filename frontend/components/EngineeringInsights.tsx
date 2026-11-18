@@ -25,13 +25,13 @@ export default function EngineeringInsights() {
         {
             title: "Asynchronous Task Delegation",
             icon: Network,
-            description: "Complex route optimizations exceeding threshold limits are automatically offloaded to a background worker cluster, preventing main thread blocking and ensuring high API availability.",
-            tech: ["FastAPI", "Celery", "Redis"]
+            description: "Background requests run as real asynchronous API tasks. The UI polls stage progress and stops when a job completes or fails. Job state is temporary and local to one API process.",
+            tech: ["FastAPI", "Async tasks", "Job polling"]
         },
         {
             title: "Multi-Heuristic Pathfinding",
             icon: Cpu,
-            description: "The engine dynamically selects between Dijkstra and A* based on the search space size and available heuristics, optimizing for both speed and path optimality.",
+            description: "Dijkstra and A* search a weighted waypoint graph. Road costs come from OSRM; a conservative zero heuristic keeps live A* admissible. Local distance mode uses a Haversine heuristic.",
             tech: ["Algorithm Selection", "A*", "Dijkstra"]
         },
         {
@@ -41,10 +41,10 @@ export default function EngineeringInsights() {
             tech: ["2-opt", "Heuristics", "Optimization"]
         },
         {
-            title: "Real-time Data Resilience",
+            title: "Live Location and Clear Failures",
             icon: Database,
-            description: "Leveraging Supabase's real-time engine and PostgreSQL, the system provides instant job tracking and persistent log event streaming for every route calculation.",
-            tech: ["PostgreSQL", "Real-time", "Supabase"]
+            description: "The browser can track its real GPS position with permission. Provider failures are shown explicitly, and local demonstration mode is selected separately. No mock places or completed jobs are substituted.",
+            tech: ["Geolocation", "OSRM", "Photon"]
         }
     ];
 
@@ -65,13 +65,13 @@ export default function EngineeringInsights() {
                 </div>
                 <div className="flex items-center gap-4 text-slate-500 font-mono text-xs">
                     <div className="flex flex-col items-end">
-                        <span>UPTIME: 99.9%</span>
-                        <span>LATENCY: &lt;50MS</span>
+                        <span>ADJACENCY LISTS</span>
+                        <span>MIN-HEAP SEARCH</span>
                     </div>
                     <div className="h-10 w-[1px] bg-slate-800"></div>
                     <div className="flex flex-col items-end">
-                        <span>WORKERS: ACTIVE</span>
-                        <span>NODES: 1,240</span>
+                        <span>FIXED ENDPOINTS</span>
+                        <span>2-OPT REFINEMENT</span>
                     </div>
                 </div>
             </div>

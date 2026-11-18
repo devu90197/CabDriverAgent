@@ -89,7 +89,7 @@ export default function StatsCard({ title, value, description, icon, delay, onMo
         <h3 className="text-lg font-bold text-white">{title}</h3>
       </div>
       <p className={`text-3xl font-extrabold mb-2 ${value ? 'text-white' : 'text-gray-500'}`}>
-        {value || 'Calculating...'}
+        {value || '--'}
       </p>
       <p className="text-gray-300 text-sm">{description}</p>
     </div>

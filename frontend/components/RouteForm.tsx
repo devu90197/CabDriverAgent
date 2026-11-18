@@ -1,427 +1,137 @@
-import { useState } from 'react';
-import { MapPin, Navigation, Brain } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { LocationSearch, MapComponent } from './index';
+import { Location, RouteInput, RoutePath, validLocation } from '../lib/routeTypes';
 
-interface Location {
-  lat: number;
-  lng: number;
+interface Props {
+  onSubmit: (data: RouteInput) => void; loading: boolean;
+  routePath?: RoutePath | null; onInputsChange: () => void;
 }
+const inputClass = 'w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white';
 
-interface RouteFormProps {
-  onSubmit: (data: {
-    pickup: Location;
-    dropoff: Location;
-    stops: Location[];
-    optimizeFor: string;
-    algorithm: string;
-    asyncMode: boolean;
-    detailedSteps: boolean; // New property for step-by-step execution
-    showAlgorithmComparison: boolean; // New property for algorithm comparison
-  }) => void;
-  loading: boolean;
-}
-
-export default function RouteForm({
-  onSubmit,
-  loading
-}: RouteFormProps) {
+export default function RouteForm({ onSubmit, loading, routePath, onInputsChange }: Props) {
   const [pickup, setPickup] = useState<Location>({ lat: 12.9716, lng: 77.5946 });
   const [dropoff, setDropoff] = useState<Location>({ lat: 12.9352, lng: 77.6245 });
   const [stops, setStops] = useState<Location[]>([]);
-  const [algorithm, setAlgorithm] = useState<string>('auto');
-  const [asyncMode, setAsyncMode] = useState<boolean>(false);
-  const [detailedSteps, setDetailedSteps] = useState<boolean>(false);
-  const [showAlgorithmComparison, setShowAlgorithmComparison] = useState<boolean>(false);
-  const [optimizeFor, setOptimizeFor] = useState<string>('time');
-  const [activeField, setActiveField] = useState<'pickup' | 'dropoff' | 'stop' | null>(null);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit({
-      pickup,
-      dropoff,
-      stops,
-      optimizeFor,
-      algorithm,
-      asyncMode,
-      detailedSteps, // Pass detailedSteps to onSubmit
-      showAlgorithmComparison, // Pass showAlgorithmComparison to onSubmit
-    });
+  const [algorithm, setAlgorithm] = useState('auto');
+  const [optimizeFor, setOptimizeFor] = useState('distance');
+  const [routingMode, setRoutingMode] = useState<'road' | 'demo'>('road');
+  const [asyncMode, setAsyncMode] = useState(false);
+  const [detailedSteps, setDetailedSteps] = useState(true);
+  const [showAlgorithmComparison, setShowAlgorithmComparison] = useState(true);
+  const [activeField, setActiveField] = useState<'pickup' | 'dropoff' | 'stop'>('pickup');
+  const [selectedStop, setSelectedStop] = useState(0);
+  const [livePosition, setLivePosition] = useState<Location | null>(null);
+  const [accuracy, setAccuracy] = useState(0);
+  const [tracking, setTracking] = useState(false);
+  const [autoReroute, setAutoReroute] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState('');
+  const [error, setError] = useState('');
+  const watcher = useRef<number | null>(null);
+  const locationGeneration = useRef(0);
+  const latest = useRef({ pickup, dropoff, stops, algorithm, optimizeFor, routingMode, asyncMode, detailedSteps, showAlgorithmComparison, livePosition, loading, hasRoute: !!routePath, onSubmit, onInputsChange });
+  latest.current = { pickup, dropoff, stops, algorithm, optimizeFor, routingMode, asyncMode, detailedSteps, showAlgorithmComparison, livePosition, loading, hasRoute: !!routePath, onSubmit, onInputsChange };
+  useEffect(() => {
+    if (!tracking || !autoReroute) return;
+    const timer = setInterval(() => {
+      const state = latest.current;
+      const point = state.livePosition;
+      if (!point || state.loading || !state.hasRoute || ![point, state.dropoff, ...state.stops].every(validLocation)) return;
+      const movedMeters = Math.hypot(point.lat - state.pickup.lat, (point.lng - state.pickup.lng) * Math.cos(point.lat * Math.PI / 180)) * 111320;
+      if (movedMeters < 50) return;
+      if ([state.dropoff, ...state.stops].some(p => p.lat === point.lat && p.lng === point.lng)) return;
+      setPickup(point);
+      state.onInputsChange();
+      state.onSubmit({ pickup: point, dropoff: state.dropoff, stops: state.stops, algorithm: state.algorithm, optimizeFor: state.optimizeFor, routingMode: state.routingMode, asyncMode: state.asyncMode, detailedSteps: state.detailedSteps, showAlgorithmComparison: state.showAlgorithmComparison });
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [tracking, autoReroute]);
+  const stopTracking = () => {
+    locationGeneration.current++;
+    if (watcher.current !== null) navigator.geolocation.clearWatch(watcher.current);
+    watcher.current = null; setTracking(false);
   };
-
-  const addStop = () => {
-    setStops([...stops, { lat: 12.95, lng: 77.6 }]);
+  useEffect(() => () => { locationGeneration.current++; if (watcher.current !== null) navigator.geolocation.clearWatch(watcher.current); }, []);
+  const locate = () => {
+    if (tracking) { stopTracking(); setGpsStatus('Location tracking stopped.'); return; }
+    if (!navigator.geolocation || !window.isSecureContext) { setGpsStatus('Location needs HTTPS or localhost and a browser with geolocation support.'); return; }
+    const generation = ++locationGeneration.current;
+    setTracking(true); setGpsStatus('Waiting for location permission and a position fix…');
+    let firstFix = true;
+    watcher.current = navigator.geolocation.watchPosition(position => {
+      if (generation !== locationGeneration.current) return;
+      const point = { lat: position.coords.latitude, lng: position.coords.longitude };
+      setLivePosition(point); setAccuracy(position.coords.accuracy);
+      setGpsStatus(`Location updated ${new Date(position.timestamp).toLocaleTimeString()} · accuracy ±${Math.round(position.coords.accuracy)} m`);
+      if (firstFix) { firstFix = false; setPickup(point); onInputsChange(); }
+    }, err => {
+      if (generation !== locationGeneration.current) return;
+      if (err.code === 1) {
+        setGpsStatus('Location permission denied. Allow it in browser settings, or use the map and coordinate fields.');
+        stopTracking();
+      } else {
+        // Timeouts and temporary position loss do not revoke the ongoing watcher.
+        setGpsStatus('Waiting for another location fix. Tracking remains active; check device location settings.');
+      }
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 });
   };
-
-  const updateStop = (index: number, field: 'lat' | 'lng', value: number) => {
-    const newStops = [...stops];
-    newStops[index] = { ...newStops[index], [field]: value };
-    setStops(newStops);
+  const update = (setter: (p: Location) => void, point: Location) => { setter(point); onInputsChange(); };
+  const updateStops = (points: Location[]) => { setStops(points); onInputsChange(); };
+  const submit = () => {
+    const points = [pickup, ...stops, dropoff];
+    if (!points.every(validLocation)) { setError('Enter finite coordinates: latitude -90 to 90, longitude -180 to 180.'); return; }
+    if (new Set(points.map(p => `${p.lat},${p.lng}`)).size !== points.length) { setError('Pickup, dropoff and stops must have distinct coordinates.'); return; }
+    setError(''); onSubmit({ pickup, dropoff, stops, algorithm, optimizeFor, routingMode, asyncMode, detailedSteps, showAlgorithmComparison });
   };
-
-  const removeStop = (index: number) => {
-    const newStops = [...stops];
-    newStops.splice(index, 1);
-    setStops(newStops);
-  };
-
-  return (
-    <div className="w-full max-w-4xl mx-auto">
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Pickup Location */}
-        <div className="space-y-3">
-          <label className="block text-lg font-semibold text-gray-200">
-            📍 Pickup Location
-          </label>
-          <LocationSearch
-            placeholder="Enter pickup address or landmark"
-            onSelect={(location) => setPickup({ lat: location.lat, lng: location.lng })}
-            initialValue="Bangalore, India"
-            textColor="text-white"
-          />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Latitude</label>
-              <input
-                type="number"
-                step="any"
-                value={pickup.lat}
-                onChange={(e) => setPickup({ ...pickup, lat: parseFloat(e.target.value) })}
-                placeholder="Enter latitude"
-                className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                onFocus={() => setActiveField('pickup')}
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Longitude</label>
-              <input
-                type="number"
-                step="any"
-                value={pickup.lng}
-                onChange={(e) => setPickup({ ...pickup, lng: parseFloat(e.target.value) })}
-                placeholder="Enter longitude"
-                className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                onFocus={() => setActiveField('pickup')}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Dropoff Location */}
-        <div className="space-y-3">
-          <label className="block text-lg font-semibold text-gray-200">
-            🏁 Dropoff Location
-          </label>
-          <LocationSearch
-            placeholder="Enter destination address or landmark"
-            onSelect={(location) => setDropoff({ lat: location.lat, lng: location.lng })}
-            initialValue="Koramangala, Bangalore, India"
-            textColor="text-white"
-          />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Latitude</label>
-              <input
-                type="number"
-                step="any"
-                value={dropoff.lat}
-                onChange={(e) => setDropoff({ ...dropoff, lat: parseFloat(e.target.value) })}
-                placeholder="Enter latitude"
-                className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                onFocus={() => setActiveField('dropoff')}
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Longitude</label>
-              <input
-                type="number"
-                step="any"
-                value={dropoff.lng}
-                onChange={(e) => setDropoff({ ...dropoff, lng: parseFloat(e.target.value) })}
-                placeholder="Enter longitude"
-                className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                onFocus={() => setActiveField('dropoff')}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Stops */}
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <label className="block text-lg font-semibold text-gray-200">
-              🚩 Intermediate Stops ({stops.length})
-            </label>
-            <button
-              type="button"
-              onClick={addStop}
-              className="flex items-center gap-1 px-4 py-2 bg-gradient-to-r from-pink-500/20 to-purple-500/20 text-pink-300 rounded-lg hover:from-pink-500/30 hover:to-purple-500/30 transition-all border border-pink-500/30"
-            >
-              <span>+ Add Stop</span>
-            </button>
-          </div>
-
-          <div className="space-y-4 max-h-60 overflow-y-auto pr-2">
-            {stops.map((stop, idx) => (
-              <div key={idx} className="grid grid-cols-1 gap-3 p-4 bg-gray-800/30 rounded-xl border border-gray-700/50 card-glass">
-                <LocationSearch
-                  placeholder={`Enter stop ${idx + 1} address or landmark`}
-                  onSelect={(location) => {
-                    const newStops = [...stops];
-                    newStops[idx] = { lat: location.lat, lng: location.lng };
-                    setStops(newStops);
-                  }}
-                  textColor="text-white"
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">Latitude</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={stop.lat}
-                      onChange={(e) => updateStop(idx, 'lat', parseFloat(e.target.value))}
-                      placeholder="Enter latitude"
-                      className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">Longitude</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={stop.lng}
-                      onChange={(e) => updateStop(idx, 'lng', parseFloat(e.target.value))}
-                      placeholder="Enter longitude"
-                      className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-                <div className="md:col-span-1 flex items-end">
-                  <button
-                    type="button"
-                    onClick={() => removeStop(idx)}
-                    className="w-full py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-all border border-red-500/30"
-                  >
-                    Remove Stop
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Interactive Map */}
-        <div className="space-y-3">
-          <label className="block text-lg font-semibold text-gray-200">
-            🗺️ Interactive Map
-          </label>
-          <p className="text-sm text-gray-400 mb-2">
-            Click on the map to set pickup/dropoff locations. First click on a location field above, then click on the map.
-          </p>
-          <MapComponent
-            pickup={pickup}
-            dropoff={dropoff}
-            stops={stops}
-            onPickupChange={setPickup}
-            onDropoffChange={setDropoff}
-            onStopsChange={setStops}
-            activeField={activeField}
-            onStopSelect={(index) => {
-              // Logic to handle stop selection would go here
-            }}
-          />
-        </div>
-
-        {/* Optimization Preference */}
-        <div className="bg-gray-800/30 rounded-xl border border-gray-700/50 p-6 card-glass">
-          <h3 className="text-xl font-bold text-white mb-4">Optimization Preference</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <label className="flex items-center gap-3 p-3 bg-gray-800/30 rounded-xl border border-gray-700/50 cursor-pointer hover:bg-gray-800/50 transition-all card-glass">
-              <input
-                type="radio"
-                name="optimizeFor"
-                value="time"
-                checked={optimizeFor === 'time'}
-                onChange={() => setOptimizeFor('time')}
-                className="w-4 h-4 text-blue-500"
-              />
-              <div>
-                <span className="block font-medium text-white">⏱️ Time</span>
-                <span className="block text-xs text-gray-400">Fastest route</span>
-              </div>
-            </label>
-
-            <label className="flex items-center gap-3 p-3 bg-gray-800/30 rounded-xl border border-gray-700/50 cursor-pointer hover:bg-gray-800/50 transition-all card-glass">
-              <input
-                type="radio"
-                name="optimizeFor"
-                value="distance"
-                checked={optimizeFor === 'distance'}
-                onChange={() => setOptimizeFor('distance')}
-                className="w-4 h-4 text-blue-500"
-              />
-              <div>
-                <span className="block font-medium text-white">📏 Distance</span>
-                <span className="block text-xs text-gray-400">Shortest route</span>
-              </div>
-            </label>
-
-            <label className="flex items-center gap-3 p-3 bg-gray-800/30 rounded-xl border border-gray-700/50 cursor-pointer hover:bg-gray-800/50 transition-all card-glass">
-              <input
-                type="radio"
-                name="optimizeFor"
-                value="fare"
-                checked={optimizeFor === 'fare'}
-                onChange={() => setOptimizeFor('fare')}
-                className="w-4 h-4 text-blue-500"
-              />
-              <div>
-                <span className="block font-medium text-white">💰 Fare</span>
-                <span className="block text-xs text-gray-400">Most economical</span>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        {/* Algorithm Selection */}
-        <div className="bg-gray-800/30 rounded-xl border border-gray-700/50 p-6 card-glass">
-          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-            <Brain className="w-5 h-5 text-amber-500" />
-            Algorithm Selection
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label className="flex items-center gap-3 p-4 bg-gray-800/30 rounded-xl border border-gray-700/50 cursor-pointer hover:bg-gray-800/50 transition-all card-glass">
-              <input
-                type="radio"
-                name="algorithm"
-                value="auto"
-                checked={algorithm === 'auto'}
-                onChange={() => setAlgorithm('auto')}
-                className="w-5 h-5 text-blue-500"
-              />
-              <div>
-                <span className="block font-medium text-white">🤖 Auto Select</span>
-                <span className="block text-sm text-gray-400">Let system choose best algorithm</span>
-              </div>
-            </label>
-
-            <label className="group relative flex flex-col gap-3 p-4 bg-slate-900/40 border border-slate-700/50 rounded-xl cursor-pointer hover:border-amber-500/50 transition-all card-glass overflow-hidden">
-              <div className="flex items-center gap-3">
-                <input
-                  type="radio"
-                  name="algorithm"
-                  value="dijkstra"
-                  checked={algorithm === 'dijkstra'}
-                  onChange={() => setAlgorithm('dijkstra')}
-                  className="w-5 h-5 text-amber-500 accent-amber-500"
-                />
-                <div>
-                  <span className="block font-bold text-white tracking-tight">Classic Dijkstra</span>
-                  <span className="block text-xs text-slate-500 font-mono">O(E log V) Efficiency</span>
-                </div>
-              </div>
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none mt-2">
-                <p className="text-[10px] text-slate-400 leading-tight">
-                  Guarantees the shortest path by exploring all possible directions uniformly. Ideal for smaller search spaces where precision is paramount.
-                </p>
-              </div>
-              <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/5 blur-2xl rounded-full translate-x-1/2 -translate-y-1/2 group-hover:bg-blue-500/10 transition-colors"></div>
-            </label>
-
-            <label className="group relative flex flex-col gap-3 p-4 bg-slate-900/40 border border-slate-700/50 rounded-xl cursor-pointer hover:border-amber-500/50 transition-all card-glass overflow-hidden">
-              <div className="flex items-center gap-3">
-                <input
-                  type="radio"
-                  name="algorithm"
-                  value="astar"
-                  checked={algorithm === 'astar'}
-                  onChange={() => setAlgorithm('astar')}
-                  className="w-5 h-5 text-amber-500 accent-amber-500"
-                />
-                <div>
-                  <span className="block font-bold text-white tracking-tight">A* Optimized Search</span>
-                  <span className="block text-xs text-slate-500 font-mono">Heuristic Guided</span>
-                </div>
-              </div>
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none mt-2">
-                <p className="text-[10px] text-slate-400 leading-tight">
-                  Uses the Haversine formula as a heuristic to prune the search space, drastically reducing computation time while maintaining optimality.
-                </p>
-              </div>
-              <div className="absolute top-0 right-0 w-16 h-16 bg-purple-500/5 blur-2xl rounded-full translate-x-1/2 -translate-y-1/2 group-hover:bg-purple-500/10 transition-colors"></div>
-            </label>
-          </div>
-        </div>
-
-        {/* Additional Options */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Async Mode */}
-          <div className="flex items-center p-4 bg-gray-800/30 rounded-xl border border-gray-700/50 card-glass">
-            <input
-              type="checkbox"
-              id="async-mode"
-              checked={asyncMode}
-              onChange={(e) => setAsyncMode(e.target.checked)}
-              className="w-5 h-5 text-indigo-500 rounded focus:ring-indigo-500"
-            />
-            <label htmlFor="async-mode" className="ml-3 text-gray-200 font-medium">
-              🔄 Async Mode (Recommended for complex routes)
-            </label>
-          </div>
-
-          {/* Detailed Steps */}
-          <div className="flex items-center p-4 bg-gray-800/30 rounded-xl border border-gray-700/50 card-glass">
-            <input
-              type="checkbox"
-              id="detailed-steps"
-              checked={detailedSteps}
-              onChange={(e) => setDetailedSteps(e.target.checked)}
-              className="w-5 h-5 text-indigo-500 rounded focus:ring-indigo-500"
-            />
-            <label htmlFor="detailed-steps" className="ml-3 text-gray-200 font-medium">
-              📋 Show Detailed Steps (Step-by-step execution)
-            </label>
-          </div>
-
-          {/* Algorithm Comparison */}
-          <div className="flex items-center p-4 bg-gray-800/30 rounded-xl border border-gray-700/50 card-glass">
-            <input
-              type="checkbox"
-              id="algorithm-comparison"
-              checked={showAlgorithmComparison}
-              onChange={(e) => setShowAlgorithmComparison(e.target.checked)}
-              className="w-5 h-5 text-indigo-500 rounded focus:ring-indigo-500"
-            />
-            <label htmlFor="algorithm-comparison" className="ml-3 text-gray-200 font-medium">
-              🆚 Show Algorithm Comparison (Dijkstra vs A*)
-            </label>
-          </div>
-        </div>
-
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={loading}
-          className={`w-full py-4 px-6 rounded-xl font-bold text-lg transition-all duration-300 flex items-center justify-center gap-2 ${loading
-              ? 'bg-gradient-to-r from-gray-600 to-gray-700 text-gray-300 cursor-not-allowed'
-              : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-0.5'
-            }`}
-        >
-          {loading ? (
-            <>
-              <span className="inline-block w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></span>
-              Calculating Optimal Route...
-            </>
-          ) : (
-            <>
-              <Navigation className="w-5 h-5" />
-              Calculate Optimal Route
-            </>
-          )}
-        </button>
-      </form>
+  const coordinates = (point: Location, setter: (p: Location) => void, name: string, field: 'pickup' | 'dropoff' | 'stop', index = 0) => <div className="grid grid-cols-2 gap-3 mt-3">
+    {(['lat', 'lng'] as const).map(axis => <label key={axis} className="text-sm text-slate-400">{axis === 'lat' ? 'Latitude' : 'Longitude'}
+      <input aria-label={`${name} ${axis === 'lat' ? 'latitude' : 'longitude'}`} type="number" step="any" required min={axis === 'lat' ? -90 : -180} max={axis === 'lat' ? 90 : 180}
+        value={Number.isFinite(point[axis]) ? point[axis] : ''} onFocus={() => { setActiveField(field); setSelectedStop(index); }}
+        onChange={e => update(setter, { ...point, [axis]: e.target.value === '' ? NaN : Number(e.target.value) })} className={inputClass} />
+    </label>)}
+  </div>;
+  return <div className="w-full max-w-4xl mx-auto"><form onSubmit={e => { e.preventDefault(); submit(); }} className="space-y-8">
+    <div className="flex flex-wrap gap-3 items-center">
+      <button type="button" onClick={locate} className="px-4 py-3 border border-blue-400 rounded-lg text-blue-200">{tracking ? 'Stop live location' : 'Use my live location'}</button>
+      {livePosition && <button type="button" className="text-amber-300 underline" onClick={() => update(setPickup, livePosition)}>Set pickup to latest position</button>}
+      <p className="text-sm text-slate-400" role="status">{gpsStatus || 'Choose pickup/dropoff by address, coordinates, or map. Location tracking is optional.'}</p>
+      <label className="text-sm text-slate-300"><input type="checkbox" checked={autoReroute} onChange={e => setAutoReroute(e.target.checked)} /> Refresh route from live position (checks every 30 seconds after 50 m movement)</label>
     </div>
-  );
+    {([{ point: pickup, setter: setPickup, name: 'Pickup', field: 'pickup' }, { point: dropoff, setter: setDropoff, name: 'Dropoff', field: 'dropoff' }] as const).map(({ point, setter, name, field }) => <section key={name}>
+      <h2 className="text-lg font-semibold text-white mb-3">{name} location</h2>
+      <LocationSearch placeholder={`Search ${name.toLowerCase()} address or landmark`} onSelect={p => update(setter, { lat: p.lat, lng: p.lng })} />
+      {coordinates(point, setter, name, field)}
+    </section>)}
+    <section className="space-y-4">
+      <div className="flex justify-between items-center"><h2 className="text-lg text-white font-semibold">Intermediate stops ({stops.length}/10)</h2><button type="button" disabled={stops.length >= 10} onClick={() => updateStops([...stops, { lat: NaN, lng: NaN }])} className="text-amber-300 disabled:opacity-40">+ Add Stop</button></div>
+      {stops.map((stop, i) => <div key={i} className="p-4 rounded-xl border border-slate-700 space-y-3">
+        <h3 className="text-white">Stop {i + 1}</h3>
+        <LocationSearch placeholder={`Search stop ${i + 1}`} onSelect={p => updateStops(stops.map((old, j) => i === j ? { lat: p.lat, lng: p.lng } : old))} />
+        {coordinates(stop, p => setStops(stops.map((old, j) => i === j ? p : old)), `Stop ${i + 1}`, 'stop', i)}
+        <button type="button" onClick={() => updateStops(stops.filter((_, j) => j !== i))} className="text-red-300">Remove Stop {i + 1}</button>
+      </div>)}
+    </section>
+    <section className="space-y-3">
+      <h2 className="text-lg font-semibold text-white">Interactive map</h2>
+      <div className="flex flex-wrap gap-2" aria-label="Map selection">
+        {(['pickup', 'dropoff'] as const).map(field => <button key={field} type="button" aria-pressed={activeField === field} onClick={() => setActiveField(field)} className={`px-3 py-2 rounded-lg border ${activeField === field ? 'border-amber-400 text-amber-300' : 'border-slate-600 text-slate-300'}`}>Set {field} on map</button>)}
+        {stops.map((_, i) => <button type="button" key={i} onClick={() => { setActiveField('stop'); setSelectedStop(i); }} className={`px-3 py-2 rounded-lg border ${activeField === 'stop' && selectedStop === i ? 'border-amber-400 text-amber-300' : 'border-slate-600 text-slate-300'}`}>Set stop {i + 1} on map</button>)}
+      </div>
+      <p className="text-sm text-slate-400">Click the map to set {activeField === 'stop' ? `stop ${selectedStop + 1}` : activeField}, or drag a marker. Blue dot = live device position; amber line = calculated route.</p>
+      <MapComponent pickup={pickup} dropoff={dropoff} stops={stops} routePath={routePath} onPickupChange={p => update(setPickup, p)} onDropoffChange={p => update(setDropoff, p)} onStopsChange={updateStops} activeField={activeField} selectedStop={selectedStop} livePosition={livePosition} accuracy={accuracy} />
+    </section>
+    <div className="grid md:grid-cols-3 gap-4 p-5 bg-slate-800/40 rounded-xl border border-slate-700">
+      <label className="text-slate-300">Routing data<select aria-label="Routing data" className={inputClass} value={routingMode} onChange={e => { setRoutingMode(e.target.value as 'road' | 'demo'); onInputsChange(); }}><option value="road">Live road service</option><option value="demo">Local DSA demo (straight lines)</option></select></label>
+      <label className="text-slate-300">Algorithm<select aria-label="Algorithm" className={inputClass} value={algorithm} onChange={e => { setAlgorithm(e.target.value); onInputsChange(); }}><option value="auto">Auto select</option><option value="dijkstra">Dijkstra</option><option value="astar">A*</option><option value="nn+2opt">Nearest Neighbor + 2-opt</option></select></label>
+      <label className="text-slate-300">Optimize stop order for<select aria-label="Optimization objective" className={inputClass} value={optimizeFor} onChange={e => { setOptimizeFor(e.target.value); onInputsChange(); }}><option value="distance">Road-distance cost</option><option value="time">Driving-time cost</option></select></label>
+    </div>
+    <p className="text-sm text-slate-400">Dijkstra/A* keep stops in input order. Auto uses Nearest Neighbor + 2-opt when stops exist, with pickup and dropoff fixed. Road legs follow the provider driving profile; no live traffic or fare data is included. Local demo ETA assumes 30 km/h.</p>
+    <div className="flex flex-wrap gap-5 text-slate-300">
+      <label><input type="checkbox" checked={asyncMode} onChange={e => { setAsyncMode(e.target.checked); onInputsChange(); }} /> Background job with live progress</label>
+      <label><input type="checkbox" checked={detailedSteps} onChange={e => { setDetailedSteps(e.target.checked); onInputsChange(); }} /> Detailed DSA steps</label>
+      <label><input type="checkbox" checked={showAlgorithmComparison} onChange={e => { setShowAlgorithmComparison(e.target.checked); onInputsChange(); }} /> Compare Dijkstra and A*</label>
+    </div>
+    <p className="text-xs text-slate-500">Address search: Photon / OpenStreetMap. Searches and road coordinates are sent to the selected map providers. Device tracking stays in this browser until you set it as pickup and calculate.</p>
+    {error && <p role="alert" className="text-red-300">{error}</p>}
+    <button type="submit" disabled={loading} className="w-full py-4 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl">{loading ? 'Calculating route…' : 'Calculate route'}</button>
+  </form></div>;
 }
