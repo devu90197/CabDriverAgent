@@ -24,7 +24,7 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     dlon = lon2 - lon1 
     dlat = lat2 - lat1 
     a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
-    c = 2 * math.asin(math.sqrt(a)) 
+    c = 2 * math.asin(math.sqrt(min(1.0, max(0.0, a))))
     r = 6371  # Radius of earth in kilometers
     return c * r
 
@@ -64,6 +64,9 @@ def dijkstra(graph: Dict[int, List[Tuple[int, float]]], start: int, end: int) ->
                 previous[neighbor] = current_node
                 heapq.heappush(pq, (distance, neighbor))
     
+    if not math.isfinite(distances[end]):
+        return [], float('inf')
+
     # Reconstruct path
     path = []
     current = end
@@ -99,11 +102,11 @@ def astar(graph: Dict[int, List[Tuple[int, float]]],
     distances = {node: float('inf') for node in graph}
     distances[start] = 0
     previous = {}
-    pq = [(0, start)]
+    pq = [(0, 0, start)]
     visited = set()
     
     while pq:
-        current_distance, current_node = heapq.heappop(pq)
+        _, current_distance, current_node = heapq.heappop(pq)
         
         if current_node in visited:
             continue
@@ -120,8 +123,11 @@ def astar(graph: Dict[int, List[Tuple[int, float]]],
                 distances[neighbor] = distance
                 previous[neighbor] = current_node
                 priority = distance + heuristic(neighbor, end)
-                heapq.heappush(pq, (priority, neighbor))
+                heapq.heappush(pq, (priority, distance, neighbor))
     
+    if not math.isfinite(distances[end]):
+        return [], float('inf')
+
     # Reconstruct path
     path = []
     current = end

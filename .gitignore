@@ -35,3 +35,10 @@ node_modules/
 # Temporary files
 *.tmp
 *.temp
+
+# Deployment secrets and local verification artifacts
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.pytest_cache/
+.ipynb_checkpoints/

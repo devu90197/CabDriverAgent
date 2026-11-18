@@ -56,7 +56,7 @@ def test_dijkstra_complex():
     
     path, distance = dijkstra(graph, 0, 3)
     assert path == [0, 2, 1, 3]
-    assert distance == 3  # 0->2 (1) + 2->1 (2) + 1->3 (1) = 4
+    assert distance == 4  # 0->2 (1) + 2->1 (2) + 1->3 (1) = 4
 
 
 def test_astar_basic():
